@@ -1,0 +1,459 @@
+:root {
+    --color-primary: #1e88e5; /* Blue for balances/actions */
+    --color-positive: #2e7d32; /* Green for receipts/gains */
+    --color-negative: #c62828; /* Red for returns/investments/alerts */
+    --color-neutral: #f5f5f5; /* Light background */
+    --color-text-dark: #333;
+    --color-border: #ddd;
+    --padding-base: 15px;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+body {
+    background-color: var(--color-neutral);
+    color: var(--color-text-dark);
+    padding-top: 60px; /* Space for fixed header */
+    padding-bottom: 70px; /* Space for fixed footer */
+}
+
+/* --- HEADER STYLES --- */
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 var(--padding-base);
+    background-color: white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    z-index: 1000;
+}
+
+header h1 {
+    font-size: 1.2em;
+    font-weight: 600;
+    color: var(--color-primary);
+}
+
+header nav button {
+    background: none;
+    border: none;
+    padding: 10px 15px;
+    cursor: pointer;
+    font-size: 0.9em;
+    color: var(--color-text-dark);
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+}
+
+header nav button:hover {
+    color: var(--color-primary);
+}
+
+header nav button.active {
+    color: var(--color-primary);
+    border-bottom: 2px solid var(--color-primary);
+    font-weight: 600;
+}
+
+.header-actions button {
+    margin-left: 10px;
+}
+
+/* --- BUTTON STYLES --- */
+button {
+    padding: 8px 15px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.btn-primary {
+    background-color: var(--color-primary);
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: #1565c0;
+}
+
+.btn-secondary {
+    background-color: #9e9e9e;
+    color: white;
+}
+
+.btn-danger {
+    background-color: var(--color-negative);
+    color: white;
+}
+
+/* --- MAIN CONTENT LAYOUT --- */
+main {
+    padding: var(--padding-base);
+}
+
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--padding-base);
+    margin-bottom: var(--padding-base);
+}
+
+.card {
+    background-color: white;
+    padding: var(--padding-base);
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.card h3 {
+    font-size: 1em;
+    color: #757575;
+    margin-bottom: 5px;
+}
+
+.card .amount {
+    font-size: 1.8em;
+    font-weight: 700;
+}
+
+.amount.balance { color: var(--color-primary); }
+.amount.positive { color: var(--color-positive); }
+.amount.negative { color: var(--color-negative); }
+
+/* --- PEOPLE/INVESTMENT LISTS --- */
+.list-container {
+    display: grid;
+    gap: 10px;
+}
+
+.list-item {
+    background-color: white;
+    padding: var(--padding-base);
+    border-radius: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-left: 5px solid var(--color-primary);
+}
+
+.list-item-content h4 {
+    margin-bottom: 4px;
+    font-size: 1.1em;
+}
+
+.list-item-actions button {
+    margin-left: 5px;
+    padding: 5px 10px;
+}
+
+.transaction-log {
+    list-style: none;
+    padding: 0;
+}
+
+.log-item {
+    padding: 10px 0;
+    border-bottom: 1px dashed var(--color-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.9em;
+}
+
+.log-item:last-child {
+    border-bottom: none;
+}
+
+.log-amount.Receipt { color: var(--color-positive); }
+.log-amount.Return { color: var(--color-negative); }
+.log-amount.Investment { color: var(--color-negative); }
+
+.log-item-actions {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.btn-edit-tx, .btn-delete-tx {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.1em;
+    padding: 2px 5px;
+    opacity: 0.6;
+}
+.btn-edit-tx:hover, .btn-delete-tx:hover { opacity: 1; }
+/* --- FOOTER STYLES --- */
+#dashboard-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: #333;
+    color: white;
+    z-index: 900;
+    box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.footer-summary {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding: 10px var(--padding-base);
+}
+
+.footer-summary > div {
+    text-align: center;
+}
+
+.footer-summary span {
+    display: block;
+    font-size: 0.8em;
+}
+
+.footer-summary .amount {
+    font-size: 1.2em;
+    font-weight: 600;
+}
+
+#footer-toggle {
+    background: none;
+    border: 1px solid white;
+    color: white;
+    font-size: 0.7em;
+    padding: 5px 8px;
+}
+
+#footer-details {
+    padding: var(--padding-base);
+    background-color: #222;
+}
+
+.alert-message {
+    padding: 10px;
+    margin-top: 10px;
+    border-radius: 4px;
+    font-weight: 600;
+    background-color: #ffcdd2;
+    color: var(--color-negative);
+    border: 1px solid var(--color-negative);
+    text-align: center;
+}
+
+/* --- MODAL STYLES --- */
+.modal {
+    display: none; /* Hidden by default */
+    position: fixed;
+    z-index: 2000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+    padding-top: 60px;
+}
+
+.modal-content {
+    background-color: #fefefe;
+    margin: 5% auto; /* 5% from the top and centered */
+    padding: 20px;
+    border-radius: 8px;
+    width: 90%; 
+    max-width: 600px;
+    position: relative;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.close-btn {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+}
+
+.close-btn:hover,
+.close-btn:focus {
+    color: var(--color-text-dark);
+    text-decoration: none;
+    cursor: pointer;
+}
+
+/* --- FORM STYLES --- */
+form label {
+    display: block;
+    margin: 10px 0 5px;
+    font-weight: 500;
+}
+
+form input[type="text"],
+form input[type="number"],
+form input[type="date"],
+form select {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 10px;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+}
+
+.form-tabs {
+    display: flex;
+    margin-bottom: 15px;
+}
+
+.form-tabs input[type="radio"] {
+    display: none;
+}
+
+.form-tabs label {
+    flex-grow: 1;
+    text-align: center;
+    padding: 10px;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-neutral);
+    cursor: pointer;
+    font-weight: normal;
+    transition: background-color 0.2s;
+}
+
+.form-tabs input[type="radio"]:checked + label {
+    background-color: var(--color-primary);
+    color: white;
+    border-color: var(--color-primary);
+}
+
+.small-note {
+    font-size: 0.8em;
+    color: #757575;
+    margin-bottom: 10px;
+}
+
+.allocation-summary {
+    background-color: var(--color-neutral);
+    padding: 10px;
+    border-radius: 4px;
+    margin: 15px 0;
+    font-weight: 500;
+}
+
+/* --- RESPONSIVENESS --- */
+@media (max-width: 600px) {
+    :root {
+        --padding-base: 10px; /* Reduce base padding for mobile */
+    }
+
+    header {
+        flex-direction: column;
+        height: auto;
+        padding: 10px var(--padding-base);
+        align-items: stretch;
+    }
+    header h1 {
+        font-size: 1.1em;
+        text-align: center;
+    }
+    header nav {
+        margin: 10px 0;
+        display: flex;
+        justify-content: center;
+        width: 100%;
+        flex-wrap: wrap; /* Allow nav buttons to wrap if needed */
+    }
+    header nav button {
+        padding: 8px 10px; /* Smaller padding for buttons */
+        font-size: 0.85em;
+    }
+    .header-actions {
+        display: flex; /* Show header actions on mobile */
+        justify-content: center; /* Center buttons */
+        flex-wrap: wrap; /* Allow buttons to wrap if needed */
+        gap: 10px; /* Space between buttons */
+        margin-top: 10px;
+    }
+    .header-actions button {
+        margin-left: 0; /* Remove left margin for mobile */
+        padding: 8px 12px; /* Slightly smaller padding for touch targets */
+        font-size: 0.9em; /* Slightly smaller text */
+        flex: 1; /* Allow buttons to grow */
+        min-width: 120px; /* Ensure buttons are wide enough */
+        text-align: center;
+    }
+    body {
+        padding-top: 140px; /* Adjust for taller header */
+        padding-bottom: 100px; /* Increase bottom padding for footer on mobile */
+        font-size: 0.95em; /* Slightly smaller base font */
+    }
+    main {
+        padding: var(--padding-base);
+    }
+    .card-grid {
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); /* Smaller min width for cards */
+        gap: 10px;
+    }
+    .card .amount {
+        font-size: 1.5em; /* Reduce large amounts */
+    }
+    .list-item {
+        flex-direction: column; /* Stack list item content for mobile */
+        align-items: flex-start;
+    }
+    .list-item-actions {
+        margin-top: 10px;
+        width: 100%;
+        justify-content: flex-end;
+    }
+    .log-item {
+        flex-direction: column; /* Stack log items */
+        align-items: flex-start;
+        gap: 5px;
+    }
+    .log-item-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+    .footer-summary {
+        flex-wrap: wrap;
+        padding: 8px var(--padding-base);
+    }
+    .footer-summary > div {
+        flex-basis: 45%;
+        margin: 5px 0;
+        font-size: 0.9em;
+    }
+    .footer-summary .amount {
+        font-size: 1.1em;
+    }
+    #footer-toggle {
+        flex-basis: 100%;
+        margin-top: 10px;
+    }
+    .modal-content {
+        margin: 10% auto; /* More top margin for mobile */
+        padding: 15px;
+    }
+    button {
+        padding: 10px 15px; /* Larger touch targets */
+    }
+    .list-item-actions button,
+    .btn-edit-tx,
+    .btn-delete-tx {
+        padding: 8px 12px; /* Larger for touch */
+    }
+    .form-tabs label {
+        padding: 8px;
+        font-size: 0.9em;
+    }
+}

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Money Manager Ledger (₹)</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <header>
+        <h1>💰 Money Manager Ledger (₹)</h1>
+        <nav>
+            <button id="nav-dashboard" class="active" onclick="renderApp('dashboard')">🏠 Dashboard</button>
+            <button id="nav-people" onclick="renderApp('people')">👥 People Ledger</button>
+            <button id="nav-investments" onclick="renderApp('investments')">📈 Investments</button>
+            <button id="nav-accounts" onclick="renderApp('accounts')">🏦 Account Log</button>
+        </nav>
+        <div class="header-actions">
+            <button id="btn-add-transaction" class="btn-primary" onclick="showModal('transaction-modal')">➕ Add Transaction</button>
+            <button id="btn-settings" onclick="showModal('settings-modal')">⚙️ Data Settings</button>
+        </div>
+    </header>
+
+    <main id="app-content">
+        <h2 style="text-align: center; margin-top: 50px;">Loading...</h2>
+    </main>
+
+    <footer id="dashboard-footer">
+        <div class="footer-summary">
+            <div>
+                <span>Total Bank Balance</span>
+                <span id="footer-bank-balance" class="amount balance">₹ 0</span>
+            </div>
+            <div>
+                <span>Total Liquid Obligations</span>
+                <span id="footer-liquid-obligations" class="amount negative">₹ 0</span>
+            </div>
+            <div>
+                <span>Total Invested</span>
+                <span id="footer-total-invested" class="amount positive">₹ 0</span>
+            </div>
+            <button id="footer-toggle" onclick="toggleFooterDetails()">⬇️ Details</button>
+        </div>
+
+        <div id="footer-details" style="display: none;">
+            <canvas id="ledger-chart" height="150"></canvas>
+            <p id="liquidity-alert" class="alert-message" style="display: none;">⚠️ **Liquidity Alert:** Bank balance is less than liquid obligations!</p>
+        </div>
+    </footer>
+
+    <div id="transaction-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="hideModal('transaction-modal')">&times;</span>
+            <h2>New Transaction</h2>
+
+            <div class="form-tabs">
+                <input type="radio" id="tab-receipt" name="transaction-type" value="Receipt" checked>
+                <label for="tab-receipt">Receipt</label>
+                <input type="radio" id="tab-return" name="transaction-type" value="Return">
+                <label for="tab-return">Return</label>
+                <input type="radio" id="tab-investment" name="transaction-type" value="Investment">
+                <label for="tab-investment">Investment</label>
+            </div>
+
+            <form id="transaction-form" onsubmit="handleTransaction(event)">
+                <label for="trans-person">Person:</label>
+                <select id="trans-person" required>
+                    <option value="" disabled selected>Select a person</option>
+                    ${/* Options populated dynamically via script.js */''}
+                </select>
+
+                <label for="trans-amount">Amount (₹):</label>
+                <input type="number" id="trans-amount" min="1" step="any" required>
+
+                <label for="trans-date">Date:</label>
+                <input type="date" id="trans-date" value="" required>
+
+                <label for="trans-notes">Notes (optional):</label>
+                <input type="text" id="trans-notes">
+
+                <div id="investment-fields" style="display: none;">
+                    <label for="invest-name">Investment Name:</label>
+                    <input type="text" id="invest-name" placeholder="e.g., NSDL IPO, ITC Share">
+                    <p class="small-note">For complex investments (multiple contributors), use the **Investments** tab.</p>
+                </div>
+                
+                <button type="submit" class="btn-primary">Add Transaction</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="investment-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="hideModal('investment-modal')">&times;</span>
+            <h2 id="investment-modal-title">New Investment</h2>
+            <form id="advanced-investment-form" onsubmit="handleAdvancedInvestment(event)">
+                <input type="hidden" id="invest-id">
+
+                <label for="adv-invest-name">Investment Name:</label>
+                <input type="text" id="adv-invest-name" required>
+
+                <label for="adv-total-amount">Total Investment Amount (₹):</label>
+                <input type="number" id="adv-total-amount" min="1" step="any" required onchange="updateAllocationSummary()">
+
+                <label for="adv-invest-date">Date:</label>
+                <input type="date" id="adv-invest-date" required>
+
+                <h3>Contributor Allocation</h3>
+                <div id="contributors-list">
+                    <p class="small-note">Total allocated must equal Total Investment Amount.</p>
+                </div>
+                <button type="button" onclick="addContributorRow()">+ Add Contributor</button>
+
+                <div class="allocation-summary">
+                    <p>Allocated: <span id="allocated-amount" class="balance">₹ 0</span> / Total: <span id="required-amount" class="balance">₹ 0</span></p>
+                    <p id="allocation-alert" class="alert-message" style="display: none;">Allocation mismatch!</p>
+                </div>
+                
+                <button type="submit" class="btn-primary" id="adv-invest-submit-btn">Create Investment</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="hideModal('settings-modal')">&times;</span>
+            <h2>Data Settings</h2>
+            
+            <h3>Export Data</h3>
+            <p>Download all ledger data as a JSON file.</p>
+            <button onclick="exportData()" class="btn-secondary">⬇️ Export JSON</button>
+
+            <h3 style="margin-top: 20px;">Import Data (Caution!)</h3>
+            <p>This will overwrite ALL existing data. Import a valid ledger JSON file.</p>
+            <input type="file" id="import-file" accept=".json">
+            <button onclick="importData()" class="btn-danger">⬆️ Import JSON</button>
+
+            <h3 style="margin-top: 20px;">Reset Application</h3>
+            <p>Permanently delete all data and start from scratch. This cannot be undone.</p>
+            <button onclick="clearAllData()" class="btn-danger">💥 Clear All Data</button>
+        </div>
+    </div>
+
+    <div id="shortfall-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="hideModal('shortfall-modal')">&times;</span>
+            <h2 id="shortfall-title">Simulate Withdrawal</h2>
+            <form id="shortfall-form" onsubmit="simulateWithdrawal(event)">
+                <input type="hidden" id="shortfall-person-id">
+                <label for="shortfall-amount">Withdrawal Amount (₹):</label>
+                <input type="number" id="shortfall-amount" min="1" step="any" required>
+                <button type="submit" class="btn-primary">Simulate</button>
+            </form>
+            <div id="shortfall-result" style="margin-top: 20px;">
+                </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
