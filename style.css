@@ -366,7 +366,6 @@ form select {
         text-align: center;
     }
     header nav {
-        margin: 10px 0;
         display: flex;
         justify-content: center;
         width: 100%;
@@ -456,4 +455,5 @@ form select {
         padding: 8px;
         font-size: 0.9em;
     }
+
 }
