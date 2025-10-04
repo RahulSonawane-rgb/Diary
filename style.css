@@ -347,6 +347,18 @@ form select {
     margin: 15px 0;
     font-weight: 500;
 }
+.chart-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    align-items: start;
+}
+.chart-grid > div {
+    /* This helps Chart.js calculate its size correctly and prevents collapsing */
+    position: relative;
+    /* Use a fixed height to give Chart.js a stable container to draw in. */
+    height: 300px; 
+}
 
 /* --- RESPONSIVENESS --- */
 @media (max-width: 600px) {
@@ -459,5 +471,12 @@ form select {
     .form-tabs label {
         padding: 8px;
         font-size: 0.9em;
+    }
+    .chart-grid {
+        grid-template-columns: 1fr; /* Stack charts on mobile */
+        gap: 30px;
+    }
+    .chart-grid > div {
+        height: 280px; /* Adjust height for mobile view */
     }
 }
