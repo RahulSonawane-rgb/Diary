@@ -26,28 +26,7 @@
         <h2 style="text-align: center; margin-top: 50px;">Loading...</h2>
     </main>
 
-    <footer id="dashboard-footer">
-        <div class="footer-summary">
-            <div>
-                <span>Total Bank Balance</span>
-                <span id="footer-bank-balance" class="amount balance">₹ 0</span>
-            </div>
-            <div>
-                <span>Total Liquid Obligations</span>
-                <span id="footer-liquid-obligations" class="amount negative">₹ 0</span>
-            </div>
-            <div>
-                <span>Total Invested</span>
-                <span id="footer-total-invested" class="amount positive">₹ 0</span>
-            </div>
-            <button id="footer-toggle" onclick="toggleFooterDetails()">⬇️ Details</button>
-        </div>
-
-        <div id="footer-details" style="display: none;">
-            <canvas id="ledger-chart" height="150"></canvas>
-            <p id="liquidity-alert" class="alert-message" style="display: none;">⚠️ **Liquidity Alert:** Bank balance is less than liquid obligations!</p>
-        </div>
-    </footer>
+    
 
     <div id="transaction-modal" class="modal">
         <div class="modal-content">
