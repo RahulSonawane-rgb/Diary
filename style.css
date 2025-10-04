@@ -291,7 +291,6 @@ main {
     cursor: pointer;
 }
 
-/* --- FORM STYLES --- */
 form label {
     display: block;
     margin: 10px 0 5px;
@@ -359,17 +358,21 @@ form select {
         flex-direction: column;
         height: auto;
         padding: 10px var(--padding-base);
-        align-items: stretch;
+        align-items: center; /* Changed back to center for better alignment */
     }
     header h1 {
         font-size: 1.1em;
         text-align: center;
+        order: -1; /* Ensure h1 appears first */
+        margin-bottom: 10px; /* Space below title */
+        z-index: 1; /* Ensure h1 is above other elements */
     }
     header nav {
         display: flex;
         justify-content: center;
         width: 100%;
         flex-wrap: wrap; /* Allow nav buttons to wrap if needed */
+        order: 0; /* Navigation comes after h1 */
     }
     header nav button {
         padding: 8px 10px; /* Smaller padding for buttons */
@@ -381,6 +384,8 @@ form select {
         flex-wrap: wrap; /* Allow buttons to wrap if needed */
         gap: 10px; /* Space between buttons */
         margin-top: 10px;
+        order: 1; /* Actions come after navigation */
+        width: 100%; /* Full width for better spacing */
     }
     .header-actions button {
         margin-left: 0; /* Remove left margin for mobile */
@@ -391,7 +396,7 @@ form select {
         text-align: center;
     }
     body {
-        padding-top: 140px; /* Adjust for taller header */
+        padding-top: 160px; /* Increased to account for taller header */
         padding-bottom: 100px; /* Increase bottom padding for footer on mobile */
         font-size: 0.95em; /* Slightly smaller base font */
     }
@@ -455,5 +460,4 @@ form select {
         padding: 8px;
         font-size: 0.9em;
     }
-
 }
