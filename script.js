@@ -1,6 +1,7 @@
 const STORAGE_KEY = 'moneyManagerLedgerData';
 let appData = {};
-let ledgerChart = null; // Variable to hold the Chart.js instance
+let totalOwedChart = null; // Variable to hold the total owed chart instance
+let investedFundsChart = null; // Variable to hold the invested funds chart instance
 
 // --- UTILITY FUNCTIONS ---
 
@@ -160,11 +161,9 @@ function updateGlobalMetrics() {
         alertElement.style.display = 'none';
     }
 
-    // 5. Update charts if they exist
-    if (ledgerChart) {
-        updateCharts(liquidObligations, totalInvested, bankBalance, totalOwed);
-    }
-
+    // The main renderApp function calls this function. Calling renderApp from here would
+    // create an infinite loop. The charts are correctly redrawn whenever renderApp is called,
+    // so no additional action is needed here to update them.
 }
 
 
@@ -811,11 +810,16 @@ function renderDashboard(content) {
             </div>
         </div>
         
-        <div style="margin-top: 30px;">
-            <h3>Liquidity Visualization</h3>
-            <canvas id="dashboard-chart" height="150"></canvas>
+        <div class="chart-grid" style="margin-top: 30px;">
+            <div>
+                <h3>Total Owed Funds by Person</h3>
+                <canvas id="total-owed-chart"></canvas>
+            </div>
+            <div>
+                <h3>Portfolio Allocation by Investment</h3>
+                <canvas id="invested-funds-chart"></canvas>
+            </div>
         </div>
-        
         <h3 style="margin-top: 30px;">Recent Activity</h3>
         <ul id="recent-activity-list" class="transaction-log"></ul>
     `;
@@ -836,31 +840,91 @@ function renderDashboard(content) {
         `;
     });
     
-    // Initialize Chart.js
-    if (ledgerChart) ledgerChart.destroy();
-    const ctx = document.getElementById('dashboard-chart').getContext('2d');
-    ledgerChart = new Chart(ctx, {
+    // --- Chart 1: Total Owed by Person ---
+    const owedData = appData.people.map(p => {
+        const liquidOwedToPerson = Math.max(0, p.netOwed);
+        return { name: p.name, amount: liquidOwedToPerson };
+    }).filter(p => p.amount > 0);
+
+    if (totalOwedChart) totalOwedChart.destroy();
+    const totalOwedCtx = document.getElementById('total-owed-chart').getContext('2d');
+    totalOwedChart = new Chart(totalOwedCtx, {
         type: 'doughnut',
         data: {
-            labels: ['Liquid Owed', 'Invested Owed'],
+            labels: owedData.map(p => p.name),
             datasets: [{
-                data: [liquidObligations, totalInvested],
-                backgroundColor: [
-                    '#c62828', // Red for liquid
-                    '#2e7d32'  // Green for invested
-                ],
+                label: 'Liquid Owed',
+                data: owedData.map(p => p.amount),
+                backgroundColor: generateColors(owedData.length),
                 hoverOffset: 4
             }]
         },
         options: {
             responsive: true,
+            maintainAspectRatio: false,
             plugins: {
                 legend: {
-                    position: 'top',
+                    position: 'right',
                 },
                 title: {
                     display: true,
-                    text: 'Allocation of Owed Funds'
+                    text: `Total: ${formatCurrency(liquidObligations)}`
+                }
+            }
+        }
+    });
+
+    // --- Chart 2: Invested Funds by Investment Name ---
+    const investedData = appData.investments.map(inv => {
+        return { name: inv.name, amount: inv.totalAmount };
+    }).filter(inv => inv.amount > 0);
+
+    if (investedFundsChart) investedFundsChart.destroy();
+    const investedFundsCtx = document.getElementById('invested-funds-chart').getContext('2d');
+    investedFundsChart = new Chart(investedFundsCtx, {
+        type: 'doughnut',
+        data: {
+            labels: investedData.map(p => p.name),
+            datasets: [{
+                label: 'Amount Invested',
+                data: investedData.map(p => p.amount),
+                backgroundColor: generateColors(investedData.length),
+                hoverOffset: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right',
+                },
+                title: {
+                    display: true,
+                    text: `Total: ${formatCurrency(totalInvested)}`
+                },
+                tooltip: {
+                    callbacks: {
+                        // The 'title' callback sets the main title of the tooltip (e.g., "ITC Share")
+                        title: function(context) {
+                            return context[0].label;
+                        },
+                        // The 'label' callback creates the detailed breakdown lines below the title
+                        label: function(context) {
+                            const investmentIndex = context.dataIndex;
+                            const investment = appData.investments.filter(inv => inv.totalAmount > 0)[investmentIndex];
+                            
+                            if (investment && investment.contributors) {
+                                // We return an array of strings, and Chart.js will render each as a new line.
+                                const contributorLines = investment.contributors.map(c => {
+                                    const person = appData.people.find(p => p.id === c.personId);
+                                    return `${person ? person.name : 'Unknown'}: ${formatCurrency(c.amount)}`;
+                                });
+                                return contributorLines;
+                            }
+                            return `Total: ${formatCurrency(context.parsed)}`;
+                        }
+                    }
                 }
             }
         }
@@ -963,10 +1027,35 @@ function showPersonDetail(personId) {
         <p>You currently owe <strong>${formatCurrency(person.netOwed)}</strong> in liquid funds to ${person.name}.</p>
         <p>Total funds received from them: <strong>${formatCurrency(totalReceived)}</strong>.</p>
         <p>Funds returned to them: <strong>${formatCurrency(totalReturned)}</strong>.</p>
-        <p>Funds currently tied up in investments for them: <strong>${formatCurrency(totalInvested)}</strong>.check the Transaction History for more details.</p>
-        <ul>
+        <p>Funds currently tied up in investments for them: <strong>${formatCurrency(totalInvested)}</strong>. See details below.</p>
+        
+        <h3>Active Investments</h3>
+        <ul class="transaction-log">
+    `;
 
-        <h3>Transaction History</h3>
+    const personInvestments = person.invested.map(invRecord => {
+        const investment = appData.investments.find(i => i.id === invRecord.investmentId);
+        return { ...invRecord, investment };
+    }).filter(i => i.investment); // Filter out any orphaned investment records
+
+    if (personInvestments.length === 0) {
+        detailContent += `<li class="log-item">No active investments for this person.</li>`;
+    } else {
+        personInvestments.forEach(inv => {
+            detailContent += `
+                <li class="log-item">
+                    <div>
+                        <span>${inv.date} - <strong>Investment</strong>: Contributed to ${inv.investment.name}</span>
+                    </div>
+                    <div class="log-item-actions">
+                        <span class="log-amount Investment">-${formatCurrency(inv.amount)}</span>
+                        <button class="btn-edit-tx" onclick="editTransaction('${person.id}', '${inv.id}', 'Investment')">✏️</button>
+                        <button class="btn-delete-tx" onclick="deleteTransaction('${person.id}', '${inv.id}', 'Investment')">🗑️</button>
+                    </div>
+                </li>`;
+        });
+    }
+    detailContent += `</ul><h3 style="margin-top: 20px;">Full Transaction History</h3>
         <ul class="transaction-log">
     `;
 
@@ -1297,13 +1386,17 @@ function toggleFooterDetails() {
 }
 
 /**
- * Placeholder for Chart.js update logic
+ * Generates an array of distinct colors for charts.
+ * @param {number} count The number of colors to generate.
+ * @returns {string[]} An array of color hex codes.
  */
-function updateCharts(liquidObligations, totalInvested, bankBalance, totalOwed) {
-    if (ledgerChart) {
-        ledgerChart.data.datasets[0].data = [liquidObligations, totalInvested];
-        ledgerChart.update();
+function generateColors(count) {
+    const colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'];
+    const result = [];
+    for (let i = 0; i < count; i++) {
+        result.push(colors[i % colors.length]);
     }
+    return result;
 }
 
 // --- INITIALIZATION ---
