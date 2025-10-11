@@ -179,6 +179,8 @@ main {
 .log-amount.Receipt { color: var(--color-positive); }
 .log-amount.Return { color: var(--color-negative); }
 .log-amount.Investment { color: var(--color-negative); }
+.log-amount.Give { color: var(--color-negative); }
+.log-amount.Recovery { color: var(--color-positive); }
 
 .log-item-actions {
     display: flex;
@@ -352,6 +354,9 @@ form select {
     grid-template-columns: 1fr 1fr;
     gap: 20px;
     align-items: start;
+}
+.chart-grid {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
 }
 .chart-grid > div {
     /* This helps Chart.js calculate its size correctly and prevents collapsing */
