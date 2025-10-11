@@ -2,6 +2,7 @@ const STORAGE_KEY = 'moneyManagerLedgerData';
 let appData = {};
 let totalOwedChart = null; // Variable to hold the total owed chart instance
 let investedFundsChart = null; // Variable to hold the invested funds chart instance
+let loansGivenChart = null;
 
 // --- UTILITY FUNCTIONS ---
 
@@ -58,6 +59,7 @@ function loadData() {
     appData.people = appData.people || [];
     appData.accounts = appData.accounts || [];
     appData.investments = appData.investments || [];
+    appData.loans = appData.loans || [];
 
     // Ensure at least one default account exists
     if (appData.accounts.length === 0) {
@@ -84,7 +86,8 @@ function initializeData() {
             transactions: [],
             type: "Bank"
         }],
-        investments: []
+        investments: [],
+        loans: []
     };
     saveData();
 }
@@ -112,6 +115,20 @@ function recalculatePersonNetOwed(personId) {
     const totalInvested = person.invested.reduce((sum, t) => sum + t.amount, 0);
 
     person.netOwed = totalReceived - totalReturned - totalInvested;
+}
+
+/**
+ * Recalculates the net owed to me for a specific loan borrower.
+ * @param {string} loanId
+ */
+function recalculateLoanNetOwed(loanId) {
+    const loan = appData.loans.find(l => l.id === loanId);
+    if (!loan) return;
+
+    const totalGiven = loan.given.reduce((sum, t) => sum + t.amount, 0);
+    const totalRecovered = loan.recovered.reduce((sum, t) => sum + t.amount, 0);
+
+    loan.netOwedToMe = totalGiven - totalRecovered;
 }
 
 /**
@@ -145,12 +162,14 @@ function updateGlobalMetrics() {
     const bankBalance = appData.accounts[0] ? appData.accounts[0].balance : 0;
     const liquidObligations = calculateTotalLiquidObligations();
     const totalInvested = calculateTotalInvested();
+    const totalReceivables = appData.loans.reduce((sum, l) => sum + Math.max(0, l.netOwedToMe), 0);
     const totalOwed = appData.people.reduce((sum, p) => sum + Math.max(0, p.netOwed + p.invested.reduce((s,i) => s + i.amount, 0)), 0);
 
     // 3. Update DOM
     document.getElementById('footer-bank-balance').textContent = formatCurrency(bankBalance);
     document.getElementById('footer-liquid-obligations').textContent = formatCurrency(liquidObligations);
     document.getElementById('footer-total-invested').textContent = formatCurrency(totalInvested);
+    document.getElementById('footer-total-receivables').textContent = formatCurrency(totalReceivables);
 
     // 4. Liquidity Alert
     const alertElement = document.getElementById('liquidity-alert');
@@ -484,6 +503,225 @@ function handleAdvancedInvestment(event) {
 }
 
 /**
+ * Adds a new borrower to the loans list.
+ */
+function addNewLoanPerson() {
+    const name = prompt("Enter the borrower's name:");
+    if (name) {
+        appData.loans.push({
+            id: generateId(),
+            name: name,
+            given: [],
+            recovered: [],
+            netOwedToMe: 0
+        });
+        saveData();
+        renderApp('loans');
+    }
+}
+
+/**
+ * Opens the loan transaction modal for a specific borrower and type.
+ * @param {string} loanId
+ * @param {string} type 'Give' or 'Recovery'
+ */
+function addLoanTransaction(loanId, type) {
+    document.getElementById('loan-person-id').value = loanId;
+    document.querySelector(`#tab-${type.toLowerCase()}`).checked = true;
+    document.getElementById('loan-trans-date').value = getCurrentDate();
+    showModal('loan-transaction-modal');
+}
+
+/**
+ * Handles adding a loan transaction (Give/Recovery).
+ * @param {Event} event
+ */
+function handleLoanTransaction(event) {
+    event.preventDefault();
+
+    const type = document.querySelector('input[name="loan-transaction-type"]:checked').value;
+    const loanId = document.getElementById('loan-person-id').value;
+    const amount = parseFloat(document.getElementById('loan-trans-amount').value);
+    const date = document.getElementById('loan-trans-date').value || getCurrentDate();
+    const notes = document.getElementById('loan-trans-notes').value;
+    const bankAccount = appData.accounts[0];
+
+    const loan = appData.loans.find(l => l.id === loanId);
+
+    if (!loan || amount <= 0) {
+        alert("Invalid borrower or amount.");
+        return;
+    }
+
+    const transactionId = generateId();
+
+    if (type === 'Give') {
+        if (amount > bankAccount.balance) {
+            alert(`Cannot give ₹${amount}. Bank balance is only ${formatCurrency(bankAccount.balance)}.`);
+            return;
+        }
+        loan.given.push({ amount, date, notes, id: transactionId });
+        bankAccount.balance -= amount;
+        bankAccount.transactions.push({ id: transactionId, type: 'Loan Give', amount: -amount, date, description: `Gave loan to ${loan.name}. ${notes || ''}`, linkedLoanId: loanId });
+    } else if (type === 'Recovery') {
+        if (amount > loan.netOwedToMe) {
+            alert(`Cannot recover ₹${amount}. Owed is only ${formatCurrency(loan.netOwedToMe)}.`);
+            return;
+        }
+        loan.recovered.push({ amount, date, notes, id: transactionId });
+        bankAccount.balance += amount;
+        bankAccount.transactions.push({ id: transactionId, type: 'Loan Recovery', amount, date, description: `Recovered loan from ${loan.name}. ${notes || ''}`, linkedLoanId: loanId });
+    }
+
+    recalculateLoanNetOwed(loanId);
+    saveData();
+    hideModal('loan-transaction-modal');
+    document.getElementById('loan-transaction-form').reset();
+    renderApp('loans');
+    updateGlobalMetrics();
+    alert(`${type} of ${formatCurrency(amount)} successfully recorded!`);
+}
+
+/**
+ * Deletes a borrower from the loans list.
+ * @param {string} loanId
+ */
+function deleteLoanPerson(loanId) {
+    if (confirm("Are you sure you want to delete this borrower? All associated data will be lost.")) {
+        appData.loans = appData.loans.filter(l => l.id !== loanId);
+        saveData();
+        renderApp('loans');
+    }
+}
+
+/**
+ * Deletes a loan transaction and reverses its effect.
+ * @param {string} loanId
+ * @param {string} txId
+ * @param {string} type 'Give' or 'Recovery'
+ */
+function deleteLoanTransaction(loanId, txId, type) {
+    if (!confirm("Are you sure you want to delete this transaction?")) return;
+
+    const loan = appData.loans.find(l => l.id === loanId);
+    if (!loan) return;
+
+    if (type === 'Give') {
+        loan.given = loan.given.filter(t => t.id !== txId);
+    } else if (type === 'Recovery') {
+        loan.recovered = loan.recovered.filter(t => t.id !== txId);
+    }
+
+    const bankAccount = appData.accounts[0];
+    const bankTx = bankAccount.transactions.find(tx => tx.id === txId);
+    if (bankTx) {
+        bankAccount.balance -= bankTx.amount; // Reverse effect
+        bankAccount.transactions = bankAccount.transactions.filter(tx => tx.id !== txId);
+    }
+
+    recalculateLoanNetOwed(loanId);
+    saveData();
+    showLoanDetail(loanId); // Refresh detail modal
+    updateGlobalMetrics();
+}
+
+/**
+ * Edits a loan transaction.
+ * @param {string} loanId
+ * @param {string} txId
+ * @param {string} type 'Give' or 'Recovery'
+ */
+function editLoanTransaction(loanId, txId, type) {
+    const loan = appData.loans.find(l => l.id === loanId);
+    const tx = (type === 'Give' ? loan.given : loan.recovered).find(t => t.id === txId);
+    if (!tx) return;
+
+    const newAmount = parseFloat(prompt("Edit Amount:", tx.amount));
+    const newDate = prompt("Edit Date:", tx.date);
+    const newNotes = prompt("Edit Notes:", tx.notes);
+
+    if (newAmount > 0 && newDate) {
+        const bankAccount = appData.accounts[0];
+        const bankTx = bankAccount.transactions.find(btx => btx.id === txId);
+        if (bankTx) {
+            bankAccount.balance -= bankTx.amount; // Reverse old
+            bankTx.amount = (type === 'Give' ? -newAmount : newAmount);
+            bankTx.date = newDate;
+            bankTx.description = `${type === 'Give' ? 'Gave loan to' : 'Recovered loan from'} ${loan.name}. ${newNotes || ''}`;
+            bankAccount.balance += bankTx.amount; // Apply new
+        }
+
+        tx.amount = newAmount;
+        tx.date = newDate;
+        tx.notes = newNotes;
+
+        recalculateLoanNetOwed(loanId);
+        saveData();
+        showLoanDetail(loanId);
+        updateGlobalMetrics();
+    }
+}
+
+/**
+ * Shows detailed modal for a loan borrower.
+ * @param {string} loanId
+ */
+function showLoanDetail(loanId) {
+    const loan = appData.loans.find(l => l.id === loanId);
+    if (!loan) return;
+
+    recalculateLoanNetOwed(loanId);
+
+    const totalGiven = loan.given.reduce((sum, t) => sum + t.amount, 0);
+    const totalRecovered = loan.recovered.reduce((sum, t) => sum + t.amount, 0);
+
+    const allLoanTransactions = [
+        ...loan.given.map(t => ({ ...t, type: 'Give' })),
+        ...loan.recovered.map(t => ({ ...t, type: 'Recovery' }))
+    ].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    let detailContent = `
+        <span class="close-btn" onclick="hideModal('shortfall-modal')">&times;</span>
+        <h3>Summary for ${loan.name}</h3>
+        <div class="card-grid" style="grid-template-columns: repeat(2, 1fr); margin-bottom: 15px;">
+            <div class="card"><strong>Total Given:</strong><br><span class="amount negative">${formatCurrency(totalGiven)}</span></div>
+            <div class="card"><strong>Total Recovered:</strong><br><span class="amount positive">${formatCurrency(totalRecovered)}</span></div>
+            <div class="card"><strong>Net Owed to You:</strong><br><span class="amount ${loan.netOwedToMe > 0 ? 'positive' : 'balance'}">${formatCurrency(loan.netOwedToMe)}</span></div>
+        </div>
+        <h3>Full Transaction History</h3>
+        <ul class="transaction-log">
+    `;
+
+    if (allLoanTransactions.length === 0) {
+        detailContent += `<li class="log-item">No transactions recorded for this borrower.</li>`;
+    } else {
+        allLoanTransactions.forEach(t => {
+            const isPositive = t.type === 'Recovery';
+            const amountDisplay = isPositive ? formatCurrency(t.amount) : `-${formatCurrency(t.amount)}`;
+            detailContent += `
+                <li class="log-item">
+                    <div>
+                        <span>${t.date} - <strong>${t.type}</strong>: ${t.notes || 'No notes'}</span>
+                    </div>
+                    <div class="log-item-actions">
+                        <span class="log-amount ${t.type}">${amountDisplay}</span>
+                        <button class="btn-edit-tx" onclick="editLoanTransaction('${loan.id}', '${t.id}', '${t.type}')">✏️</button>
+                        <button class="btn-delete-tx" onclick="deleteLoanTransaction('${loan.id}', '${t.id}', '${t.type}')">🗑️</button>
+                    </div>
+                </li>
+            `;
+        });
+    }
+    detailContent += `</ul>`;
+
+    const modal = document.getElementById('shortfall-modal');
+    document.getElementById('shortfall-title').textContent = `Detail for ${loan.name}`;
+    document.getElementById('shortfall-form').style.display = 'none';
+    document.getElementById('shortfall-result').innerHTML = detailContent;
+    showModal('shortfall-modal');
+}
+
+/**
  * Handles adding more funds to an existing investment (New Feature).
  * @param {string} investmentId
  */
@@ -770,6 +1008,8 @@ function renderApp(view) {
         renderPeopleLedger(content);
     } else if (view === 'investments') {
         renderInvestmentPortfolio(content);
+    } else if (view === 'loans') {
+        renderLoansGiven(content);
     } else if (view === 'accounts') {
         renderAccountLog(content);
     }
@@ -818,6 +1058,10 @@ function renderDashboard(content) {
             <div>
                 <h3>Portfolio Allocation by Investment</h3>
                 <canvas id="invested-funds-chart"></canvas>
+            </div>
+            <div>
+                <h3>Loans Given Distribution</h3>
+                <canvas id="loans-given-chart"></canvas>
             </div>
         </div>
         <h3 style="margin-top: 30px;">Recent Activity</h3>
@@ -929,6 +1173,34 @@ function renderDashboard(content) {
             }
         }
     });
+    // Loans Given Distribution Chart
+    if (loansGivenChart) loansGivenChart.destroy();
+    const loansData = appData.loans.map(l => ({
+        label: l.name,
+        value: l.netOwedToMe
+    })).filter(d => d.value > 0);
+    if (loansData.length > 0) {
+        const loansLabels = loansData.map(d => d.label);
+        const loansValues = loansData.map(d => d.value);
+        const loansColors = generateColors(loansData.length);
+        loansGivenChart = new Chart(document.getElementById('loans-given-chart'), {
+            type: 'pie',
+            data: {
+                labels: loansLabels,
+                datasets: [{
+                    data: loansValues,
+                    backgroundColor: loansColors
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'top' },
+                    title: { display: true, text: `Total Loans Given: ${formatCurrency(loansValues.reduce((a, b) => a + b, 0))}` }
+                }
+            }
+        });
+    }
 }
 
 /**
@@ -1296,6 +1568,41 @@ function renderAccountLog(content) {
                 <span class="log-amount ${logClass}">${isNegative ? '-' : ''}${amountDisplay}</span>
             </li>
         `;
+    });
+}
+
+/**
+ * Renders the Loans Given Ledger View.
+ * @param {HTMLElement} content
+ */
+function renderLoansGiven(content) {
+    content.innerHTML = '<h2>💸 Loans Given Ledger</h2><div class="list-container" id="loans-list-container"></div>';
+    const listContainer = document.getElementById('loans-list-container');
+
+    const addPersonBtn = document.createElement('button');
+    addPersonBtn.textContent = '+ Add New Borrower';
+    addPersonBtn.classList.add('btn-primary');
+    addPersonBtn.style.marginBottom = '15px';
+    addPersonBtn.onclick = () => addNewLoanPerson();
+    content.insertBefore(addPersonBtn, listContainer);
+
+    appData.loans.forEach(loan => {
+        recalculateLoanNetOwed(loan.id);
+        const item = document.createElement('div');
+        item.classList.add('list-item');
+        item.innerHTML = `
+            <div class="list-item-content">
+                <h4>${loan.name}</h4>
+                <span class="amount ${loan.netOwedToMe > 0 ? 'positive' : 'balance'}">${formatCurrency(loan.netOwedToMe)}</span>
+            </div>
+            <div class="list-item-actions">
+                <button onclick="addLoanTransaction('${loan.id}', 'Give')">Give</button>
+                <button onclick="addLoanTransaction('${loan.id}', 'Recovery')">Recovery</button>
+                <button onclick="showLoanDetail('${loan.id}')">Detail</button>
+                <button onclick="deleteLoanPerson('${loan.id}')">Delete</button>
+            </div>
+        `;
+        listContainer.appendChild(item);
     });
 }
 
