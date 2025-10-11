@@ -13,6 +13,7 @@
         <nav>
             <button id="nav-dashboard" class="active" onclick="renderApp('dashboard')">🏠 Dashboard</button>
             <button id="nav-people" onclick="renderApp('people')">👥 People Ledger</button>
+            <button id="nav-loans" onclick="renderApp('loans')">💸 Loans Given</button>
             <button id="nav-investments" onclick="renderApp('investments')">📈 Investments</button>
             <button id="nav-accounts" onclick="renderApp('accounts')">🏦 Account Log</button>
         </nav>
@@ -26,7 +27,32 @@
         <h2 style="text-align: center; margin-top: 50px;">Loading...</h2>
     </main>
 
-    
+    <!-- <footer id="dashboard-footer">
+        <div class="footer-summary">
+            <div>
+                <span>Total Bank Balance</span>
+                <span id="footer-bank-balance" class="amount balance">₹ 0</span>
+            </div>
+            <div>
+                <span>Total Liquid Obligations</span>
+                <span id="footer-liquid-obligations" class="amount negative">₹ 0</span>
+            </div>
+            <div>
+                <span>Total Invested</span>
+                <span id="footer-total-invested" class="amount positive">₹ 0</span>
+            </div>
+            <div>
+                <span>Total Receivables</span>
+                <span id="footer-total-receivables" class="amount positive">₹ 0</span>
+            </div>
+            <button id="footer-toggle" onclick="toggleFooterDetails()">⬇️ Details</button>
+        </div>
+
+        <div id="footer-details" style="display: none;">
+            <canvas id="ledger-chart" height="150"></canvas>
+            <p id="liquidity-alert" class="alert-message" style="display: none;">⚠️ **Liquidity Alert:** Bank balance is less than liquid obligations!</p>
+        </div>
+    </footer> -->
 
     <div id="transaction-modal" class="modal">
         <div class="modal-content">
@@ -135,7 +161,35 @@
                 </div>
         </div>
     </div>
-
+    <div id="loan-transaction-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="hideModal('loan-transaction-modal')">&times;</span>
+            <h2>New Loan Transaction</h2>
+    
+            <div class="form-tabs">
+                <input type="radio" id="tab-give" name="loan-transaction-type" value="Give" checked>
+                <label for="tab-give">Give Loan</label>
+                <input type="radio" id="tab-recovery" name="loan-transaction-type" value="Recovery">
+                <label for="tab-recovery">Recovery</label>
+            </div>
+    
+            <form id="loan-transaction-form" onsubmit="handleLoanTransaction(event)">
+                <input type="hidden" id="loan-person-id">
+    
+                <label for="loan-trans-amount">Amount (₹):</label>
+                <input type="number" id="loan-trans-amount" min="1" step="any" required>
+    
+                <label for="loan-trans-date">Date:</label>
+                <input type="date" id="loan-trans-date" value="" required>
+    
+                <label for="loan-trans-notes">Notes (Why):</label>
+                <input type="text" id="loan-trans-notes">
+    
+                <button type="submit" class="btn-primary">Add Transaction</button>
+            </form>
+        </div>
+    </div>
+    
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="script.js"></script>
 </body>
