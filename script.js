@@ -432,6 +432,12 @@ function handleAdvancedInvestment(event) {
         return alert("Allocation mismatch. Total allocated must equal total investment amount.");
     }
     
+    const existing = appData.investments.find(i => i.name === name && i.id !== (id || ''));
+    if (existing) {
+        alert("An investment with this name already exists. Please choose a unique name.");
+        return;
+    }
+
     // Check if total amount is available in the bank
     if (totalAmount > bankAccount.balance) {
         return alert(`Cannot make investment. Bank balance is only ${formatCurrency(bankAccount.balance)}.`);
@@ -500,6 +506,152 @@ function handleAdvancedInvestment(event) {
     hideModal('investment-modal');
     renderApp('investments');
     alert(`Investment "${name}" successfully ${id ? 'updated' : 'created'}!`);
+}
+
+/**
+ * Shows the withdraw modal for an investment and populates it.
+ * @param {string} id Investment ID.
+ */
+function showWithdrawModal(id) {
+    const investment = appData.investments.find(i => i.id === id);
+    if (!investment) return alert("Investment not found.");
+
+    document.getElementById('withdraw-modal-title').textContent = `Withdraw from ${investment.name}`;
+    document.getElementById('withdraw-invest-id').value = id;
+    document.getElementById('withdraw-date').value = getCurrentDate();
+    document.getElementById('withdraw-total-amount').value = ''; // Reset
+
+    // Clear and populate contributor rows based on current contributors
+    const contributorsList = document.getElementById('withdraw-contributors-list');
+    contributorsList.innerHTML = '<p class="small-note">Total deallocated must equal Withdrawal Amount.</p>';
+    investment.contributors.forEach(contrib => {
+        const row = document.createElement('div');
+        row.innerHTML = `
+            <label>${appData.people.find(p => p.id === contrib.personId)?.name || 'Unknown'} (Current: ${formatCurrency(contrib.amount)}):</label>
+            <input type="number" class="withdraw-contrib-amount" data-person-id="${contrib.personId}" min="0" max="${contrib.amount}" step="any" required>
+        `;
+        contributorsList.appendChild(row);
+    });
+
+    updateWithdrawSummary(); // Initial summary
+    showModal('withdraw-modal');
+}
+
+/**
+ * Updates the withdrawal allocation summary.
+ */
+function updateWithdrawSummary() {
+    const totalWithdraw = parseFloat(document.getElementById('withdraw-total-amount').value) || 0;
+    let allocated = 0;
+    document.querySelectorAll('.withdraw-contrib-amount').forEach(input => {
+        allocated += parseFloat(input.value) || 0;
+    });
+
+    document.getElementById('deallocated-amount').textContent = formatCurrency(allocated);
+    document.getElementById('withdraw-required-amount').textContent = formatCurrency(totalWithdraw);
+
+    const alert = document.getElementById('withdraw-allocation-alert');
+    if (allocated !== totalWithdraw) {
+        alert.style.display = 'block';
+    } else {
+        alert.style.display = 'none';
+    }
+}
+
+/**
+ * Auto-proportions the withdrawal across contributors based on their current share.
+ */
+function autoProportionWithdraw() {
+    const totalWithdraw = parseFloat(document.getElementById('withdraw-total-amount').value) || 0;
+    const investmentId = document.getElementById('withdraw-invest-id').value;
+    const investment = appData.investments.find(i => i.id === investmentId);
+    const totalCurrent = investment.totalAmount;
+
+    if (totalWithdraw > totalCurrent) {
+        alert("Withdrawal cannot exceed current total amount.");
+        return;
+    }
+
+    document.querySelectorAll('.withdraw-contrib-amount').forEach(input => {
+        const personId = input.dataset.personId;
+        const contrib = investment.contributors.find(c => c.personId === personId);
+        const proportion = contrib.amount / totalCurrent;
+        input.value = Math.round(totalWithdraw * proportion); // Or use parseFloat for decimals
+    });
+
+    updateWithdrawSummary();
+}
+
+/**
+ * Handles the withdrawal submission.
+ * @param {Event} event
+ */
+function handleWithdraw(event) {
+    event.preventDefault();
+
+    const id = document.getElementById('withdraw-invest-id').value;
+    const totalWithdraw = parseFloat(document.getElementById('withdraw-total-amount').value);
+    const date = document.getElementById('withdraw-date').value || getCurrentDate();
+    const bankAccount = appData.accounts[0];
+
+    const investment = appData.investments.find(i => i.id === id);
+    if (totalWithdraw > investment.totalAmount) {
+        alert("Withdrawal exceeds current investment amount.");
+        return;
+    }
+
+    let allocated = 0;
+    const deallocations = [];
+    document.querySelectorAll('.withdraw-contrib-amount').forEach(input => {
+        const amount = parseFloat(input.value) || 0;
+        allocated += amount;
+        deallocations.push({ personId: input.dataset.personId, amount });
+    });
+
+    if (allocated !== totalWithdraw) {
+        alert("Deallocations must match total withdrawal amount.");
+        return;
+    }
+
+    const transactionId = generateId();
+    try {
+        // Update investment
+        investment.totalAmount -= totalWithdraw;
+        investment.date = date; // Optional: Update last modified
+
+        // Adjust contributors and persons
+        deallocations.forEach(dealloc => {
+            const contrib = investment.contributors.find(c => c.personId === dealloc.personId);
+            if (contrib) contrib.amount -= dealloc.amount;
+
+            const person = appData.people.find(p => p.id === dealloc.personId);
+            if (person) {
+                const investedEntry = person.invested.find(inv => inv.investmentId === id);
+                if (investedEntry) investedEntry.amount -= dealloc.amount;
+                recalculatePersonNetOwed(person.id);
+            }
+        });
+
+        // Credit bank (withdrawal adds back to bank)
+        bankAccount.balance += totalWithdraw;
+        bankAccount.transactions.push({
+            id: transactionId,
+            type: 'Withdrawal',
+            amount: totalWithdraw,
+            date,
+            description: `Withdrew from ${investment.name}.`,
+            investmentId: id
+        });
+
+        cleanZeroInvestments(); // Auto-remove if now zero
+        saveData();
+        updateGlobalMetrics();
+        hideModal('withdraw-modal');
+        renderApp('investments');
+        alert("Withdrawal processed successfully.");
+    } catch (e) {
+        alert("Error during withdrawal: " + e.message);
+    }
 }
 
 /**
@@ -1451,6 +1603,15 @@ function renderInvestmentPortfolio(content) {
     addInvestmentBtn.onclick = () => showInvestmentModal('create');
     listContainer.before(addInvestmentBtn);
 
+    /**
+     * Removes investments with zero or negative totalAmount to clean up data and prevent duplicates/empty entries.
+     */
+    function cleanZeroInvestments() {
+        appData.investments = appData.investments.filter(inv => inv.totalAmount > 0);
+        saveData(); // Persist the cleanup
+    }
+
+    cleanZeroInvestments();
     appData.investments.forEach(investment => {
         const item = document.createElement('div');
         item.classList.add('list-item');
@@ -1463,6 +1624,8 @@ function renderInvestmentPortfolio(content) {
                 <h4>${investment.name} (Active)</h4>
                 <p><strong>Total Invested:</strong> <span class="amount positive">${formatCurrency(investment.totalAmount)}</span></p>
                 <p><strong>Contributors:</strong> ${contributorNames}</p>
+                <button onclick="showInvestmentModal('edit', '${investment.id}')">Edit</button>
+                <button onclick="showWithdrawModal('${investment.id}')">Withdraw</button>
             </div>
             <div class="list-item-actions">
                 <button onclick="handleAddMoreFunds('${investment.id}')">Add More Funds</button>
