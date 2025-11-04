@@ -1356,6 +1356,14 @@ function renderDashboard(content) {
 }
 
 /**
+ * Removes investments with zero or negative totalAmount to clean up data and prevent duplicates/empty entries.
+ */
+function cleanZeroInvestments() {
+    appData.investments = appData.investments.filter(inv => inv.totalAmount > 0);
+    saveData(); // Persist the cleanup
+}
+
+/**
  * Renders the People Ledger View.
  * @param {HTMLElement} content
  */
@@ -1602,14 +1610,6 @@ function renderInvestmentPortfolio(content) {
     addInvestmentBtn.style.marginBottom = '15px';
     addInvestmentBtn.onclick = () => showInvestmentModal('create');
     listContainer.before(addInvestmentBtn);
-
-    /**
-     * Removes investments with zero or negative totalAmount to clean up data and prevent duplicates/empty entries.
-     */
-    function cleanZeroInvestments() {
-        appData.investments = appData.investments.filter(inv => inv.totalAmount > 0);
-        saveData(); // Persist the cleanup
-    }
 
     cleanZeroInvestments();
     appData.investments.forEach(investment => {
