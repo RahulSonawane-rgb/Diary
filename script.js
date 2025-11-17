@@ -11,7 +11,7 @@ let loansGivenChart = null;
  * @returns {string} Unique ID.
  */
 function generateId() {
-    return Date.now().toString();
+    return 'ID-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
 }
 
 /**
@@ -60,6 +60,7 @@ function loadData() {
     appData.accounts = appData.accounts || [];
     appData.investments = appData.investments || [];
     appData.loans = appData.loans || [];
+    appData.bisiGroups = appData.bisiGroups || [];
 
     // Ensure at least one default account exists
     if (appData.accounts.length === 0) {
@@ -87,6 +88,7 @@ function initializeData() {
             type: "Bank"
         }],
         investments: [],
+        bisiGroups: [],
         loans: []
     };
     saveData();
@@ -1164,6 +1166,8 @@ function renderApp(view) {
         renderLoansGiven(content);
     } else if (view === 'accounts') {
         renderAccountLog(content);
+    } else if (view === 'bisi') {
+        renderBisiGroup(content);
     }
 
     updateGlobalMetrics();
@@ -1769,6 +1773,393 @@ function renderLoansGiven(content) {
     });
 }
 
+// ======================== FIXED BUG + INVESTMENT FEATURE - REAL BISi GROUP ========================
+
+function renderBisiGroup(content) {
+    content.innerHTML = `
+        <h2>Bisi Group Savings</h2>
+        <button class="btn-primary" onclick="showNewBisiModal()">+ New Group</button>
+        <div id="bisi-list" class="list-container" style="margin-top:20px;"></div>
+    `;
+
+    const list = document.getElementById('bisi-list');
+    list.innerHTML = '';
+
+    appData.bisiGroups.forEach(group => {
+        const totalCollected = group.payments.reduce((sum, p) => sum + p.amount, 0);
+        const remainingMembers = group.members.filter(m => !m.claimed).length;
+
+        const item = document.createElement('div');
+        item.className = 'list-item';
+        item.innerHTML = `
+            <div class="list-item-content">
+                <h4>${group.name} (${group.members.length} Members)</h4>
+                <p>Total Collected: ${formatCurrency(totalCollected)}</p>
+                <p>Remaining Claims: ${remainingMembers}</p>
+            </div>
+            <div class="list-item-actions">
+                <button onclick="openBisiGroupDetail('${group.id}')">Open</button>
+                <button class="btn-danger" onclick="deleteBisiGroup('${group.id}')">Delete</button>
+            </div>
+        `;
+        list.appendChild(item);
+    });
+}
+
+function showNewBisiModal() {
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.id = 'new-bisi-modal';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <span class="close-btn" onclick="this.closest('.modal').remove()">&times;</span>
+            <h2>New Bisi Group</h2>
+            <form onsubmit="createBisiGroup(event)">
+                <label>Group Name:</label>
+                <input type="text" id="group-name" required>
+
+                <label>Tenure (Months):</label>
+                <input type="number" id="group-tenure" value="18" required>
+
+                <label>Monthly Amount (₹):</label>
+                <input type="number" id="group-monthly" value="5000" required>
+
+                <button type="button" class="btn-primary" onclick="addNewMemberInput()">+ Add Member</button>
+
+                <div id="members-list" style="margin-top:10px;"></div>
+
+                <button type="submit" class="btn-primary">Create</button>
+            </form>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    showModal('new-bisi-modal');
+}
+
+function addNewMemberInput() {
+    const list = document.getElementById('members-list');
+    const row = document.createElement('div');
+    row.style.marginBottom = '5px';
+    row.innerHTML = `
+        <input type="text" placeholder="Member Name" required>
+        <button type="button" class="btn-danger" onclick="this.parentNode.remove()">Remove</button>
+    `;
+    list.appendChild(row);
+}
+
+function createBisiGroup(e) {
+    e.preventDefault();
+    const name = document.getElementById('group-name').value;
+    const tenure = parseInt(document.getElementById('group-tenure').value);
+    const monthly = parseInt(document.getElementById('group-monthly').value);
+
+    const memberInputs = document.querySelectorAll('#members-list input');
+    const membersNames = Array.from(memberInputs).map(inp => inp.value.trim()).filter(n => n);
+
+    if (membersNames.length < 2) return alert("Add at least 2 members!");
+    // console.log(membersNames);
+    const group = {
+        id: generateId(),
+        name,
+        tenure,
+        monthly,
+        pot: monthly * tenure,
+        members: membersNames.map(n => ({
+            id: generateId(),
+            name: n,
+            payments: [], // {date, amount}
+            claimed: false,
+            claimDate: null
+        })),
+        payments: [], // global payments log
+        investments: [] // {amount, date, description}
+    };
+    // console.log(group);
+
+    appData.bisiGroups.push(group);
+    saveData();
+    document.getElementById('new-bisi-modal').remove();
+    renderApp('bisi');
+}
+
+function openBisiGroupDetail(groupId) {
+    const group = appData.bisiGroups.find(g => g.id === groupId);
+    if (!group) return alert("Group not found!");
+
+    const totalCollected = group.payments.reduce((sum, p) => sum + p.amount, 0);
+    const invested = group.investments.reduce((sum, i) => sum + i.amount, 0);
+
+    let html = `
+        <h2>${group.name}</h2>
+        <button onclick="renderApp('bisi')" class="btn-secondary">Back</button>
+        <button class="btn-primary" onclick="addBisiMember('${group.id}')">+ Add Member</button>
+        <p>Total Collected: ${formatCurrency(totalCollected)}</p>
+        <p>Invested from Bisi: ${formatCurrency(invested)}</p>
+        <button class="btn-primary" onclick="investFromBisi('${group.id}')">Invest from Bisi Funds</button>
+
+        <h3>Members</h3>
+        <div class="list-container">
+    `;
+
+    group.members.forEach(m => {
+        const collected = m.payments.reduce((sum, p) => sum + p.amount, 0);
+        const remaining = group.tenure * group.monthly - collected;
+        html += `
+            <div class="list-item" data-member-id="${m.id}" data-group-id="${group.id}">
+                <h4>${m.name}</h4>
+                <p>Collected: ${formatCurrency(collected)}</p>
+                <p>Remaining to Pay: ${formatCurrency(remaining)}</p>
+                <p>Claimed: ${m.claimed ? 'Yes (' + m.claimDate + ')' : 'No'}</p>
+                <button class="record-payment-btn">Record Payment</button>
+                ${!m.claimed ? `<button class="claim-pot-btn">Claim Pot</button>` : ''}
+            </div>
+        `;
+    });
+
+    html += `</div>`;
+
+    html += `<h3>Investments from this Bisi</h3><ul class="transaction-log">`;
+    group.investments.forEach(inv => {
+        html += `<li>${inv.date} - ${inv.description}: ${formatCurrency(inv.amount)}</li>`;
+    });
+    html += `</ul>`;
+
+    document.getElementById('app-content').innerHTML = html;
+
+    // Attach event listeners after HTML is inserted
+    document.querySelectorAll('.record-payment-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const item = btn.closest('.list-item');
+            const groupId = item.dataset.groupId;
+            const memberId = item.dataset.memberId;
+            recordBisiPayment(groupId, memberId);
+        });
+    });
+
+    document.querySelectorAll('.claim-pot-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const item = btn.closest('.list-item');
+            const groupId = item.dataset.groupId;
+            const memberId = item.dataset.memberId;
+            claimBisiPot(groupId, memberId);
+        });
+    });
+}
+
+function recordBisiPayment(groupId, memberId) {
+    const group = appData.bisiGroups.find(g => g.id === groupId);
+    if (!group) return alert("Group not found!");
+
+    const member = group.members.find(m => m.id === memberId);
+    if (!member) return alert("Member not found!");
+
+    const amount = parseFloat(prompt(`Payment for ${member.name} (₹):`, group.monthly));
+    if (isNaN(amount) || amount <= 0) return;
+
+    const date = getCurrentDate();
+
+    // 1. Bisi internal tracking
+    member.payments.push({ date, amount });
+    group.payments.push({ memberId: member.id, date, amount });
+
+    // 2. Add to Bank
+    const bank = appData.accounts[0];
+    bank.balance += amount;
+    bank.transactions.push({
+        id: generateId(),
+        type: "Receipt",
+        amount,
+        date,
+        description: `Bisi - ${member.name} (${group.name})`
+    });
+
+    // 3. CREATE / UPDATE PERSON IN PEOPLE LEDGER: "Bisi - Group Name"
+    const bisiPersonName = `Bisi - ${group.name}`;
+    let bisiPerson = appData.people.find(p => p.name === bisiPersonName);
+
+    if (!bisiPerson) {
+        bisiPerson = {
+            id: generateId(),
+            name: bisiPersonName,
+            received: [],
+            returned: [],
+            invested: [],
+            netOwed: 0
+        };
+        appData.people.push(bisiPerson);
+    }
+
+    // Add receipt
+    bisiPerson.received.push({
+        id: generateId(),
+        amount,
+        date,
+        notes: `From ${member.name} (Bisi)`
+    });
+    recalculatePersonNetOwed(bisiPerson.id);
+
+    saveData();
+    updateGlobalMetrics();
+    openBisiGroupDetail(groupId);
+}
+
+function claimBisiPot(groupId, memberId) {
+    if (!confirm("Give full pot to this member?")) return;
+
+    const group = appData.bisiGroups.find(g => g.id === groupId);
+    if (!group) return alert("Group not found!");
+
+    const member = group.members.find(m => m.id === memberId);
+    if (!member) return alert("Member not found!");
+    if (member.claimed) return alert("Already claimed!");
+
+    member.claimed = true;
+    member.claimDate = getCurrentDate();
+
+    // --- Deduct from Bisi Person in Ledger ---
+    const bisiPersonName = `Bisi - ${group.name}`;
+    const bisiPerson = appData.people.find(p => p.name === bisiPersonName);
+    if (bisiPerson) {
+        bisiPerson.returned.push({
+            id: generateId(),
+            amount: group.pot,
+            date: getCurrentDate(),
+            notes: `Pot given to ${member.name}`
+        });
+        recalculatePersonNetOwed(bisiPerson.id);
+    }
+
+    // --- Deduct from Bank (real money outflow) ---
+    const bank = appData.accounts[0];
+    bank.balance -= group.pot;
+    bank.transactions.push({
+        id: generateId(),
+        type: "Return",
+        amount: -group.pot,
+        date: getCurrentDate(),
+        description: `Bisi Pot → ${member.name} (${group.name})`
+    });
+
+    saveData();
+    updateGlobalMetrics();
+    openBisiGroupDetail(groupId);
+}
+
+function addBisiMember(groupId) {
+    const name = prompt("New member name:");
+    if (!name) return;
+
+    const group = appData.bisiGroups.find(g => g.id === groupId);
+    group.members.push({
+        id: generateId(),
+        name,
+        payments: [],
+        claimed: false,
+        claimDate: null
+    });
+
+    saveData();
+    openBisiGroupDetail(groupId);
+}
+
+function investFromBisi(groupId) {
+    const group = appData.bisiGroups.find(g => g.id === groupId);
+    if (!group) return alert("Group not found!");
+
+    const totalCollected = group.payments.reduce((s, p) => s + p.amount, 0);
+    const alreadyInvested = group.investments.reduce((s, i) => s + i.amount, 0);
+    const available = totalCollected - alreadyInvested;
+
+    if (available <= 0) return alert("No funds available to invest!");
+
+    const amount = parseFloat(prompt(`Available to invest: ${formatCurrency(available)}\nEnter amount:`, available));
+    if (!amount || amount <= 0 || amount > available) return alert("Invalid amount!");
+
+    const name = prompt("Investment name (e.g., SIP in Axis, FD, Gold):", "Bisi Investment");
+    if (!name) return;
+
+    const date = getCurrentDate();
+
+    // 1. Find or create Bisi person in People Ledger
+    const bisiPersonName = `Bisi - ${group.name}`;
+    let bisiPerson = appData.people.find(p => p.name === bisiPersonName);
+    if (!bisiPerson) {
+        bisiPerson = {
+            id: generateId(),
+            name: bisiPersonName,
+            received: [],
+            returned: [],
+            invested: [],
+            netOwed: 0
+        };
+        appData.people.push(bisiPerson);
+    }
+
+    // 2. Create real Investment with proper contributor
+    const investmentId = generateId();
+    appData.investments.push({
+        id: investmentId,
+        name: name + ` (Bisi: ${group.name})`,
+        totalAmount: amount,
+        date: date,
+        contributors: [{ personId: bisiPerson.id, amount: amount }],  // PROPER CONTRIBUTOR
+        transactions: [{ type: 'Initial', amount, date }],
+        status: "Active",
+        notes: `Invested from Bisi group: ${group.name}`
+    });
+
+    // 3. Deduct from Bisi person (invested)
+    bisiPerson.invested.push({
+        id: generateId(),
+        amount: amount,
+        investmentId: investmentId,
+        date: date
+    });
+    recalculatePersonNetOwed(bisiPerson.id);
+
+    // 4. Deduct from Bank
+    const bank = appData.accounts[0];
+    bank.balance -= amount;
+    bank.transactions.push({
+        id: generateId(),
+        type: "Investment",
+        amount: -amount,
+        date,
+        description: `Bisi → ${name} (${group.name})`
+    });
+
+    // 5. Track in Bisi group
+    group.investments.push({ amount, date, description: name });
+
+    saveData();
+    updateGlobalMetrics();
+    alert(`${formatCurrency(amount)} invested in "${name}" from ${group.name}!`);
+    openBisiGroupDetail(groupId);
+}
+
+function deleteBisiGroup(id) {
+    if (!confirm("Delete this entire group? This will also remove the linked person from People Ledger.")) return;
+
+    const group = appData.bisiGroups.find(g => g.id === id);
+    if (!group) {
+        alert("Group not found!");
+        return;
+    }
+
+    // --- Remove Bisi Person from People Ledger ---
+    const bisiPersonName = `Bisi - ${group.name}`;
+    const personIndex = appData.people.findIndex(p => p.name === bisiPersonName);
+    if (personIndex !== -1) {
+        appData.people.splice(personIndex, 1);
+    }
+
+    // --- Remove Group from Bisi ---
+    appData.bisiGroups = appData.bisiGroups.filter(g => g.id !== id);
+
+    saveData();
+    updateGlobalMetrics(); // Recalculate charts after person removal
+    renderApp('bisi');
+}
 // --- DATA EXPORT/IMPORT ---
 
 /**
